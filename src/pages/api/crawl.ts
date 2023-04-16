@@ -6,7 +6,7 @@ import { TokenTextSplitter } from "langchain/text_splitter";
 import { NextApiRequest, NextApiResponse } from "next";
 import { uuid } from "uuidv4";
 import { Crawler, Page } from '../../crawler';
-
+import axios from 'axios';
 const limiter = new Bottleneck({
   minTime: 2000
 });
@@ -25,6 +25,21 @@ const initPineconeClient = async () => {
 type Response = {
   message: string
 }
+
+const projectId = process.env.PINECONE_PROJECTID!;
+const evn = process.env.PINECONE_ENVIRONMENT!;
+const indexName = process.env.PINECONE_INDEX_NAME!;
+
+const doUpsert = async (vectors: Vector[]) => {
+  const endpoint = `https://${indexName}-${projectId}.svc.${evn}.pinecone.io/vectors/upsert`;
+  const headers = {
+    'accept': 'application/json',
+    'Api-Key': process.env.PINECONE_API_KEY!
+  };
+  const response = await axios.post(endpoint, { vectors }, { headers });
+  return response.data;
+};
+
 
 const truncateStringByBytes = (str: string, bytes: number) => {
   const enc = new TextEncoder();
@@ -105,6 +120,7 @@ export default async function handler(
 
   const chunks = sliceIntoChunks(vectors, 10)
 
+  /*
   await Promise.all(chunks.map(async chunk => {
     index && await index.upsert({
       upsertRequest: {
@@ -112,6 +128,11 @@ export default async function handler(
       }
     })
   }))
+  */
+
+  await Promise.all(chunks.map(async chunk => {
+    await doUpsert(chunk as Vector[]);
+  }));
 
   res.status(200).json({ message: "Done" })
 }
